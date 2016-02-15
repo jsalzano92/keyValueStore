@@ -1,32 +1,46 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
-char KEY[10][10]; //Array of 10 Strings each with a max size of 10 for holding the key
-char VALUE[10][80];	//Array of 10 Strings each with a max size of 80 for holding the value
-int numberStored = 0; // int to keep track of number of stored key-values
+typedef struct link {
+	char key[10];
+	char value[80];
+	struct link *next;
+} keyVal;
+
+keyVal* kvList;
 
 int put(); //to associate value with a key
 int get(); //to get a value with a key
-int checkKey(char* key); //checking if key is in array KEY
+int rm();
 int getString(char* s, int size); //all buffer handling
+keyVal* createKV(char* k, char* v); // create a new node
+int checkKey(char* key, keyVal* list); //checking if key is in array KEY
+char* getValue(char* key, keyVal* list);
+int rmValue(char* key, keyVal* list, keyVal* prev);
 
-int main(int argc, char* argv[]){
-
+int main(int argc, char* argv[]) {
 	char command[10];
 	do {
 		printf("Command: ");
-		fgets(command, 10, stdin);
-		if(strcmp(command, "put\n") == 0) {
+		getString(command, 10);
+		if(strcmp(command, "put") == 0) {
 			if(put())
 				printf("Value Stored\n");
 			else
-				printf("Error in Storing\n");				
+				printf("Error in storing Value\n");				
 		}
-		if(strcmp(command, "get\n") == 0) {
+		else if(strcmp(command, "get") == 0) {
 			if(!get())
-				printf("Could Not Locate Value with given Key\n");
+				printf("Could not locate Value with given Key\n");
 		}
-	} while(strcmp(command, "quit\n") != 0);
+		else if(strcmp(command, "rm") == 0) {
+			if(!rm())
+				printf("Could not remove Value with given Key\n");
+			else
+				printf("Value Removed\n");
+		}
+	} while(strcmp(command, "quit") != 0);
 	
 	return 0;
 }
@@ -34,29 +48,21 @@ int main(int argc, char* argv[]){
 
 int put()
 {
-	if(numberStored >= 10) {
-		printf("No more room");
-		return 0;
-	}
-	
 	char keyToStore[10];
 	char valueToStore[80];	
 
-	printf("Enter Key, under 10 characters and must be unique: ");	
+	printf("Enter Key: ");	
 	if(!getString(keyToStore, 10))
 		return 0;
-	if(checkKey(keyToStore)) {
+	if(checkKey(keyToStore, kvList)) {
 		printf("Key already in use\n");
 		return 0;
 	}
-	printf("Enter String to store (max 80 characters): ");
+	printf("Enter Value: ");
 	if(!getString(valueToStore, 80))
 		return 0;
 
-	strcpy(KEY[numberStored], keyToStore);
-	strcpy(VALUE[numberStored], valueToStore);
-
-	numberStored++;
+	kvList = createKV(keyToStore, valueToStore);
 
 	return 1;
 }
@@ -68,21 +74,25 @@ int get() {
 	if(!getString(keyToCheck, 10))
 		return 0;
 
-	for(int i = 0; i < numberStored; i++) {
-		if(strcmp(KEY[i], keyToCheck) == 0) {
-			printf("%s\n", VALUE[i]);
-			return 1;
-		}
+	char* val = getValue(keyToCheck, kvList);
+	
+	if(val != NULL) {
+		printf("%s\n", val);
+		return 1;
 	}
 
 	return 0;
 }
 
-int checkKey(char* key) {
-	for(int i = 0; i < numberStored; i++)
-		if(strcmp(KEY[i], key) == 0)
-			return 1;
-	
+int rm() {
+	printf("Enter Key: ");
+	char keyToRemove[10];
+	if(!getString(keyToRemove, 10))
+		return 0;
+
+	if(rmValue(keyToRemove, kvList, NULL))
+		return 1;
+
 	return 0;
 }
 
@@ -101,4 +111,53 @@ int getString(char* s, int size) {
 	}
 	else
 		return 0;
+}
+
+/*
+	Linked List Functions
+*/
+
+keyVal* createKV(char k[], char v[]) {
+	keyVal *toReturn = (keyVal*)malloc(sizeof(keyVal));
+	strcpy(toReturn->key, k);
+	strcpy(toReturn->value, v);
+	toReturn->next = kvList;
+	return toReturn;
+}
+
+int checkKey(char* key, keyVal* list)	{
+	if(list == NULL)
+		return 0;
+	
+	if(strcmp(list->key, key) == 0)
+		return 1;
+	else
+		return checkKey(key, list->next);
+}
+
+char* getValue(char* key, keyVal* list) {
+	if(list == NULL)
+		return NULL;
+
+	if(strcmp(list->key, key) == 0)
+		return list->value;
+	else
+		return getValue(key, list->next);
+}
+
+int rmValue(char* key, keyVal* list, keyVal* prev) {
+	if(list == NULL)
+		return 0;
+
+	if(strcmp(list->key, key) == 0) {
+		if(prev == NULL)
+			kvList = list->next;
+		else
+			prev->next = list->next;
+		free(list);
+		return 1;
+	}
+	else {
+		return rmValue(key, list->next, list);
+	}
 }
