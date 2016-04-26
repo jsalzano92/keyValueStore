@@ -15,6 +15,12 @@ int connectToServer(char* host, int port);
 int sockt, portN, serverReturn;
 struct sockaddr_in serv_addr;
 struct hostent* server;
+	
+typedef struct header {
+	char type;
+	int	kSize;
+	int vSize;
+} header;
 
 int main(int argc, char* argv[]) {
 
@@ -44,7 +50,7 @@ int main(int argc, char* argv[]) {
                 printf("Value Removed\n");
         }
     } while(strcmp(command, "quit") != 0);
-	write(sockt, "q", 10);
+	write(sockt, "q", 1);
 	return 0;
 }
 
@@ -77,13 +83,19 @@ int put()
     if(!getString(valueToStore, 80))
         return 0;
 
-	write(sockt, "p", 10);
+	header *head = (header*)malloc(sizeof(header));
+	
+	head->type = 'p';
+	head->kSize = strlen(keyToStore);
+	head->vSize = strlen(valueToStore);
+
+	send(sockt, head, sizeof(header), 0);
+	
 	char test[10];
 	read(sockt, test, 10);
-	printf(test);
-    // SUBMIT TO SERVER
-    // kvList = createKV(keyToStore, valueToStore);
-
+	printf("%s\n",test);
+	
+	free(head);
     return 1;
 }
 
@@ -96,17 +108,21 @@ int get() {
     // GET FROM SERVER
     // char* val = getValue(keyToCheck, kvList);
 
-	char* val = NULL;
+	char val[80];
 
-	write(sockt, "g", 10);
+	header *head = (header*)malloc(sizeof(header));
+	
+	head->type = 'g';
+	head->kSize = strlen(keyToCheck);
+	head->vSize = 0;
+
+	send(sockt, head, sizeof(header), 0);
+	
 	char test[10];
 	read(sockt, test, 10);
-	printf(test);
-    if(val != NULL) {
-        printf("%s\n", val);
-        return 1;
-    }
-
+	printf("%s\n",test);
+	
+	free(head);
     return 0;
 }
 
@@ -116,14 +132,19 @@ int rm() {
     if(!getString(keyToRemove, 10))
         return 0;
 
-	write(sockt, "rm", 10);
+	header *head = (header*)malloc(sizeof(header));
+	
+	head->type = 'r';
+	head->kSize = strlen(keyToRemove);
+	head->vSize = 0;
+
+	send(sockt, head, sizeof(header), 0);
+
 	char test[10];
 	read(sockt, test, 10);
-	printf(test);
-	// REMOVE FROM SERVER
-    //if(rmValue(keyToRemove, kvList, NULL))
-    //    return 1;
-
+	printf("%s\n",test);
+	
+	free(head);
     return 0;
 }
 

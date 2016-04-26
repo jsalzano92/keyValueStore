@@ -15,6 +15,12 @@ typedef struct link {
 	struct link *next;
 } keyVal;
 
+typedef struct header{
+	char type;
+	int kSize;
+	int vSize;
+} header;
+
 keyVal* kvList;
 
 int put(); //to associate value with a key
@@ -45,34 +51,32 @@ struct sockaddr_in serv_addr, cli_addr;
 int initServer(int port);
 void promptClient(char* message);
 void listenToClient();
+void parseHeader(char *header, int len, char *type, int *size0, int *size1);
+
 /*
 	END SERVER VARIABLES and FUNCTIONS
 */
 
 int main(int argc, char* argv[]) {
-	printf("This is the start");
 	//get port from user
 	if(argc != 2) {
 		printf("Port Number Needed");
 		return 1;
 	}
-	printf("Whill it even get here?");
 	//Start Server
-	initServer(atoi(argv[1]));
-	//	return 1;
-	printf("Testing");
-	listen(sockt, 5);
+	if(!initServer(atoi(argv[1])))
+		return -1;
+	listen(sockt, 5);	
 	clientLen = sizeof(cli_addr);
 		
 	while(1) {
-		printf("waiting for connection");
 		client = accept(sockt, (struct sockaddr*) &cli_addr, &clientLen);
 		if(client < 0)
 			printf("Failed to accept");
 		pid = fork();
 		if(pid == 0) {
-			printf("connected");
 			listenToClient();
+			printf("Client Disconected");
 			exit(0);
 		} else {
 			close(client);
@@ -83,13 +87,11 @@ int main(int argc, char* argv[]) {
 }
 
 int initServer(int port) {
-	printf("here?");
 	sockt = socket(AF_INET, SOCK_STREAM, 0);
 	if(sockt < 0) {
 		printf("Cant open socket!");
 		return 0;
 	}
-	printf("Trying..");
 	bzero((char*) &serv_addr, sizeof(serv_addr));
 
 	portN = port;
@@ -114,25 +116,31 @@ void promptClient(char* message) {
 }
 
 void listenToClient() {
-	printf("Listening");
-	char header[10];
-	char type;
-	int	size;	
-	do {
-		read(client, header, 10);
-		//printf("got something");
-		//fgets(type,sizeof(char),header);
-		if(header[0] == 'p') {
-			write(client, "Going to Put", 10);
+	int len;
+	header *head = (header*)malloc(sizeof(header));
+	while(1) {
+		len = recv(client, head, sizeof(header), 0);
+		if(len != sizeof(header))
+			break;
+		//parseHeader(header, len,);
+
+		if(head->type == 'p') {
+			write(client, "put", 10);
 		}
-		else if(header[0] == 'g') {
-			write(client, "Going to Get", 10);
+		else if(head->type == 'g') {
+			write(client, "get", 10);
 		}
-		else if(header[0] = 'r') {
-			write(client, "Going to Remove", 10);
+		else if(head->type == 'r') {
+			write(client, "remove", 10);
 		}
-	} while(strcmp(header, "quit") != 0);
+	}
+	free(head);
 	close(client);
+	exit(0);
+}
+
+void parseHeader(char *header, int len, char *type, int *size0, int *size1) {
+	
 }
 
 /*
