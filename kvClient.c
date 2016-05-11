@@ -11,6 +11,7 @@ int put();
 int get();
 int rm();
 int getString(char* s, int size); //all buffer handling
+int getData(char* buff, int size, FILE* file);
 int connectToServer(char* host, int port);
 int sockt, portN, serverReturn;
 struct sockaddr_in serv_addr;
@@ -28,28 +29,47 @@ int main(int argc, char* argv[]) {
 		printf("Could Not Connect To Server.");
 		return -1;
 	}
-
-	char command[10];
-    do {
-        printf("Command: ");
-    	getString(command, 10);
-	    if(strcmp(command, "put") == 0) {
+	if(argc > 3) {
+		if(argv[3][0] == 'p') {
 			if(put())
-                printf("Value Stored\n");
-            else
-                printf("Error in storing Value\n");
-        }
-        else if(strcmp(command, "get") == 0) {
-            if(!get())
-                printf("Could not locate Value with given Key\n");
-        }
-        else if(strcmp(command, "rm") == 0) {
-            if(!rm())
-                printf("Could not remove Value with given Key\n");
-            else
-                printf("Value Removed\n");
-        }
-    } while(strcmp(command, "quit") != 0);
+	        	printf("Value Stored\n");
+			else
+            	printf("Error in storing Value\n");
+		} else if(argv[3][0] == 'g') {
+			if(!get())
+        		printf("Could not locate Value with given Key\n");
+		} else if(argv[3][0] == 'r') {
+			if(!rm())
+    	       	printf("Could not remove Value with given Key\n");
+	        else
+            	printf("Value Removed\n");
+		} else {
+			printf("Invalad Command");
+		}
+	}
+	else{
+		char command[10];
+    	do {
+        	printf("Command: ");
+    		getString(command, 10);
+	    	if(strcmp(command, "put") == 0) {
+				if(put())
+                	printf("Value Stored\n");
+            	else
+                	printf("Error in storing Value\n");
+        	}
+        	else if(strcmp(command, "get") == 0) {
+            	if(!get())
+                	printf("Could not locate Value with given Key\n");
+        	}
+        	else if(strcmp(command, "rm") == 0) {
+            	if(!rm())
+                	printf("Could not remove Value with given Key\n");
+            	else
+                	printf("Value Removed\n");
+        	}
+		} while(strcmp(command, "quit") != 0);
+	}
 	write(sockt, "q", 1);
 	return 0;
 }
@@ -83,18 +103,28 @@ int put()
     if(!getString(valueToStore, 80))
         return 0;
 
-	header *head = (header*)malloc(sizeof(header));
+	FILE* fp = fopen(valueToStore, "rb");
 	
+	fseek(fp, 0L, SEEK_END);
+	int fSize = ftell(fp);
+	printf("%d",fSize);
+	
+	char buff[2000];
+
+	if(!getData(buff, fSize, fp))
+		return 0;
+
+	printf("%i", strlen(buff));
+
+	header *head = (header*)malloc(sizeof(header));
+
 	head->type = 'p';
 	head->kSize = strlen(keyToStore);
-	head->vSize = strlen(valueToStore);
+	head->vSize = fSize;
 
 	send(sockt, head, sizeof(header), 0);
-	
-	char test[10];
-	read(sockt, test, 10);
-	printf("%s\n",test);
-	
+
+	fclose(fp);
 	free(head);
     return 1;
 }
@@ -163,4 +193,11 @@ int getString(char* s, int size) {
 	}
 	else
 		return 0;
+}
+
+int getData(char* buff, int size, FILE* file)
+{
+	fread(buff, 1, size, file);
+	printf("%s\n",buff);	
+	return 1;
 }
