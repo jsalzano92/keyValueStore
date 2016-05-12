@@ -109,12 +109,12 @@ int put()
 	int fSize = ftell(fp);
 	printf("%d",fSize);
 	
-	char buff[2000];
+	char buff[fSize];
 
 	if(!getData(buff, fSize, fp))
 		return 0;
 
-	printf("%i", strlen(buff));
+	printf("%s\n", buff);
 
 	header *head = (header*)malloc(sizeof(header));
 
