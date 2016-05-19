@@ -10,15 +10,18 @@
 	KEY VALUE VARIABLES and FUNCTIONS
 */
 
+char* kvStore [1000];
+
+
 typedef struct header{
 	char type;
 	int kSize;
 	int vSize;
 } header;
 
-int putKV(char* key, char* ); //to associate value with a key
-int getKV(); //to get a value with a key
-int rmKV();
+void putKV(header* h);
+void getKV(header* h);
+void rmKV(header* h);
 /*
 	END KEY VALUE VARIABLES and FUNCTIONS
 
@@ -65,9 +68,12 @@ int main(int argc, char* argv[]) {
 	//Start Server
 	if(!initServer(atoi(argv[1])))
 		return -1;
+	
+
 	listen(sockt, 5);	
 	clientLen = sizeof(cli_addr);
-		
+
+	
 	while(1) {
 		client = accept(sockt, (struct sockaddr*) &cli_addr, &clientLen);
 		if(client < 0)
@@ -117,13 +123,13 @@ void listenToClient() {
 		//parseHeader(header, len,);
 
 		if(head->type == 'p') {
-			write(client, "put", 10);
+			putKV(head);
 		}
 		else if(head->type == 'g') {
-			write(client, "get", 10);
+			getKV(head);
 		}
 		else if(head->type == 'r') {
-			write(client, "remove", 10);
+			rmKV(head);
 		}
 	}
 	free(head);
@@ -131,3 +137,73 @@ void listenToClient() {
 	exit(0);
 }
 
+void putKV(header* h) {
+	char* key = (char*)malloc(h->kSize);	
+
+	if(recv(client, key, h->kSize, 0) != h->kSize) {
+		write(client, "badHeadP", 10);
+		free(key);
+		return;
+	}
+
+	write(client, "inPut", 10);
+
+	//Hashmap key!!
+	//Check if key is used
+
+	free(key);
+	
+	//kvStore[0] = (char*)malloc(h->vSize);
+	char* test = (char*)malloc(h->vSize);	
+
+	recv(client, test, h->vSize, 0);
+	
+	send(client, test, h->vSize, 0);
+	//write(client, "stored", 10);
+	return;	
+}
+
+void getKV(header* h) {	
+	char* key = (char*)malloc(h->kSize);	
+
+	if(recv(client, key, h->kSize, 0) != h->kSize) {
+		write(client, "badHead", 10);
+		free(key);
+		return;
+	}
+	
+	write(client, "inGet", 10);
+
+	//Hashmap key!!
+	//Check if key is used
+
+	free(key);
+
+	if(!kvStore[0])	
+		kvStore[0] = "This is a test.";	
+
+	header *headBack = (header*)malloc(sizeof(header));
+	headBack->vSize = strlen(kvStore[0]);
+	send(client, headBack, sizeof(header), 0);
+
+	send(client, kvStore[0], strlen(kvStore[0]), 0);
+	write(client, "shouldGet", 10);
+	return;
+}
+
+
+void rmKV(header* h) {	
+	char* key = (char*)malloc(h->kSize);	
+
+	if(recv(client, key, h->kSize, 0) != h->kSize) {
+		write(client, "badHeadR", 10);
+		free(key);
+		return;
+	}
+	
+	free(key);
+	
+	write(client, "Removed", 10);
+
+	return;
+}

@@ -12,6 +12,7 @@ int get();
 int rm();
 int getString(char* s, int size); //all buffer handling
 int getData(char* buff, int size, FILE* file);
+int printBuff(char* buffer, int bufferSize);
 int connectToServer(char* host, int port);
 int sockt, portN, serverReturn;
 struct sockaddr_in serv_addr;
@@ -29,25 +30,6 @@ int main(int argc, char* argv[]) {
 		printf("Could Not Connect To Server.");
 		return -1;
 	}
-	if(argc > 3) {
-		if(argv[3][0] == 'p') {
-			if(put())
-	        	printf("Value Stored\n");
-			else
-            	printf("Error in storing Value\n");
-		} else if(argv[3][0] == 'g') {
-			if(!get())
-        		printf("Could not locate Value with given Key\n");
-		} else if(argv[3][0] == 'r') {
-			if(!rm())
-    	       	printf("Could not remove Value with given Key\n");
-	        else
-            	printf("Value Removed\n");
-		} else {
-			printf("Invalad Command");
-		}
-	}
-	else{
 		char command[10];
     	do {
         	printf("Command: ");
@@ -69,7 +51,6 @@ int main(int argc, char* argv[]) {
                 	printf("Value Removed\n");
         	}
 		} while(strcmp(command, "quit") != 0);
-	}
 	write(sockt, "q", 1);
 	return 0;
 }
@@ -83,7 +64,7 @@ int connectToServer(char* host, int port) {
 	bcopy((char*)server->h_addr,(char*)&serv_addr.sin_addr.s_addr, server->h_length);
 	serv_addr.sin_port = htons(portN);
 	if(connect(sockt,(struct sockaddr*)&serv_addr,sizeof(serv_addr)) < 0) {
-		printf("Cant connect");
+	printf("Cant connect");
 		return 0;
 	}
 
@@ -103,30 +84,48 @@ int put()
     if(!getString(valueToStore, 80))
         return 0;
 
-	FILE* fp = fopen(valueToStore, "rb");
-	
-	fseek(fp, 0L, SEEK_END);
-	int fSize = ftell(fp);
-	printf("%d",fSize);
-	
-	char buff[fSize];
-
-	if(!getData(buff, fSize, fp))
-		return 0;
-
-	printf("%s\n", buff);
-
 	header *head = (header*)malloc(sizeof(header));
 
+	FILE* fp = fopen(valueToStore, "rb");	
+	if(!fp)
+		return 0;
+
+	fseek(fp, 0L, SEEK_END);
+	int fSize = ftell(fp);
+	fseek(fp, 0L, SEEK_SET);		
+	
+	char* buff = (char*)malloc(fSize);
+	if(!getData(buff, fSize, fp))
+		return 0;
+	
 	head->type = 'p';
 	head->kSize = strlen(keyToStore);
-	head->vSize = fSize;
+	head->vSize = strlen(buff);
 
 	send(sockt, head, sizeof(header), 0);
+	send(sockt, keyToStore, strlen(keyToStore), 0);
+	free(head);	
+
+	char test[10];
+	read(sockt, test, 10);
+	printf("%s\n",test);
+
+	printf("%d\n", strlen(buff));	
+
+	//fwrite(buff, fSize, 1, stdout);
+
+	printf("\n%d\n", send(sockt, buff, strlen(buff), 0));
 
 	fclose(fp);
-	free(head);
-    return 1;
+
+	char* testbuff = (char*)malloc(strlen(buff));
+
+	recv(sockt, testbuff, strlen(buff), 0);
+
+	fwrite(testbuff, strlen(testbuff), 1, stdout);	
+	
+	free(buff);
+	return 1;
 }
 
 int get() {
@@ -135,25 +134,40 @@ int get() {
     if(!getString(keyToCheck, 10))
         return 0;
 
-    // GET FROM SERVER
-    // char* val = getValue(keyToCheck, kvList);
-
-	char val[80];
-
 	header *head = (header*)malloc(sizeof(header));
 	
 	head->type = 'g';
 	head->kSize = strlen(keyToCheck);
 	head->vSize = 0;
 
-	send(sockt, head, sizeof(header), 0);
-	
+	send(sockt, head, sizeof(header), 0);	
+	send(sockt, keyToCheck, strlen(keyToCheck), 0);
+
 	char test[10];
 	read(sockt, test, 10);
 	printf("%s\n",test);
 	
+	printf("\n\n%d\n\n", recv(sockt, head, sizeof(header), 0));
+
 	free(head);
-    return 0;
+	int fSize = head->vSize;
+	printf("%d",fSize);	
+	char* buff = (char*)malloc(fSize);
+	if(recv(sockt, buff, fSize, 0) != fSize) {
+		free(buff);
+		return 0;
+	}
+
+	char* path = "salzano.random";
+	FILE* fp = fopen(path, "wb");			
+	fwrite(buff, fSize, 1, fp);
+	fclose(fp);
+
+	read(sockt, test, 10);
+	printf("%s\n",test);
+	
+	free(buff);
+	return 1;
 }
 
 int rm() {
@@ -169,13 +183,15 @@ int rm() {
 	head->vSize = 0;
 
 	send(sockt, head, sizeof(header), 0);
+	send(sockt, keyToRemove, strlen(keyToRemove), 0);
+
+	free(head);
 
 	char test[10];
 	read(sockt, test, 10);
 	printf("%s\n",test);
 	
-	free(head);
-    return 0;
+	return 1;
 }
 
 int getString(char* s, int size) {
@@ -197,7 +213,26 @@ int getString(char* s, int size) {
 
 int getData(char* buff, int size, FILE* file)
 {
-	fread(buff, 1, size, file);
-	printf("%s\n",buff);	
+	fread(buff, size, 1, file);
 	return 1;
+}
+
+int printBuff(char* buffer, int bufferSize) {
+for (int c=0;c<bufferSize;c++)
+{
+     printf("%.2X ", (int)buffer[c]);
+
+     // put an extra space between every 4 bytes
+           if (c % 4 == 3)
+                {
+                         printf(" ");
+                              }
+     
+                                   // Display 16 bytes per line
+                                       if (c % 16 == 15)
+                                             {
+                                                      printf("\n");
+                                                           }
+                                                           }
+     printf("\n");
 }
