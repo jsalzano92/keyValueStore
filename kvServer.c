@@ -157,7 +157,8 @@ void putKV(header* h) {
 	char* test = (char*)malloc(h->vSize);	
 
 	recv(client, test, h->vSize, 0);
-	
+
+	//TESTS BY SENDING THE RECIEVED DATA RIGHT BACK	
 	send(client, test, h->vSize, 0);
 	//write(client, "stored", 10);
 	return;	
@@ -179,6 +180,7 @@ void getKV(header* h) {
 
 	free(key);
 
+	//JUST SEND A TEST!
 	if(!kvStore[0])	
 		kvStore[0] = "This is a test.";	
 

@@ -12,8 +12,10 @@ int get();
 int rm();
 int getString(char* s, int size); //all buffer handling
 int getData(char* buff, int size, FILE* file);
-int printBuff(char* buffer, int bufferSize);
 int connectToServer(char* host, int port);
+int printBuff(char* buffer, int bufferSize);
+int saveFile(char* buff, char* fileName, int size);
+
 int sockt, portN, serverReturn;
 struct sockaddr_in serv_addr;
 struct hostent* server;
@@ -55,6 +57,7 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+//HANDLES CONECTION TO SERVER
 int connectToServer(char* host, int port) {
 	portN = port;
 	sockt = socket(AF_INET, SOCK_STREAM, 0);
@@ -73,7 +76,8 @@ int connectToServer(char* host, int port) {
 
 int put()
 {
-    char keyToStore[10];
+	//Gets the key and filename of what is being sent to server.
+    char keyToStore[10]; //<< NOT USED AT MOMENT
     char valueToStore[80];
 
     printf("Enter Key: ");
@@ -86,6 +90,7 @@ int put()
 
 	header *head = (header*)malloc(sizeof(header));
 
+	//WILL consolidate to the get data function eventually
 	FILE* fp = fopen(valueToStore, "rb");	
 	if(!fp)
 		return 0;
@@ -93,38 +98,44 @@ int put()
 	fseek(fp, 0L, SEEK_END);
 	int fSize = ftell(fp);
 	fseek(fp, 0L, SEEK_SET);		
+
+	//For Testing
+	printf("\n::%d::\n", fSize);
 	
 	char* buff = (char*)malloc(fSize);
 	if(!getData(buff, fSize, fp))
 		return 0;
 	
+	//Set up header to send to Server so the server knows whats coming.
 	head->type = 'p';
 	head->kSize = strlen(keyToStore);
-	head->vSize = strlen(buff);
+	head->vSize = fSize;
 
+	//Sends the header and then the key.
 	send(sockt, head, sizeof(header), 0);
 	send(sockt, keyToStore, strlen(keyToStore), 0);
 	free(head);	
 
-	char test[10];
+	//For testing server responce. Old Test
+	int test[10];
 	read(sockt, test, 10);
-	printf("%s\n",test);
+	printf("%s\n", test);
 
-	printf("%d\n", strlen(buff));	
+	//TestFile
+	saveFile(buff, "testBeforeSent", fSize); //<< matches for both text and binary files
 
-	//fwrite(buff, fSize, 1, stdout);
+	// Tests the size of packet sent as well as sends the packer to Server
+	printf("\n%d\n", send(sockt, buff, fSize, 0));
 
-	printf("\n%d\n", send(sockt, buff, strlen(buff), 0));
-
-	fclose(fp);
-
-	char* testbuff = (char*)malloc(strlen(buff));
-
-	recv(sockt, testbuff, strlen(buff), 0);
-
-	fwrite(testbuff, strlen(testbuff), 1, stdout);	
+	//Tests what the server received by getting it right back
+	char* testbuff = (char*)malloc(fSize);
+	printf("\n%d\n", recv(sockt, testbuff, fSize, 0));
 	
+	//TestFile
+	saveFile(testbuff, "testAfterReceived", fSize); //<< does not match inputFile for binary files, works for text
+
 	free(buff);
+	free(testbuff);
 	return 1;
 }
 
@@ -158,10 +169,7 @@ int get() {
 		return 0;
 	}
 
-	char* path = "salzano.random";
-	FILE* fp = fopen(path, "wb");			
-	fwrite(buff, fSize, 1, fp);
-	fclose(fp);
+	saveFile(buff, "testRecievedFile", fSize);	
 
 	read(sockt, test, 10);
 	printf("%s\n",test);
@@ -194,6 +202,7 @@ int rm() {
 	return 1;
 }
 
+// Safest way I found to get a string. Multiple sources from stack overflow mostly
 int getString(char* s, int size) {
 	char cc; // char to clear buffer
 	char* sPoint; // to check my string
@@ -211,28 +220,36 @@ int getString(char* s, int size) {
 		return 0;
 }
 
+
+//Read File to Buffer
 int getData(char* buff, int size, FILE* file)
 {
-	fread(buff, size, 1, file);
+	//memcpy(buff, file, size); //<< NOT WORKING
+	fread(buff, size, 1, file); //<< NOT WORKING FOR BINARY
+	printBuff(buff, size);
 	return 1;
 }
 
-int printBuff(char* buffer, int bufferSize) {
-for (int c=0;c<bufferSize;c++)
-{
-     printf("%.2X ", (int)buffer[c]);
 
-     // put an extra space between every 4 bytes
-           if (c % 4 == 3)
-                {
-                         printf(" ");
-                              }
-     
-                                   // Display 16 bytes per line
-                                       if (c % 16 == 15)
-                                             {
-                                                      printf("\n");
-                                                           }
-                                                           }
-     printf("\n");
+//--------------------------------
+//NOT MY CODE, TAKEN FROM INTERNET
+//USED FOR TESTING ONLY
+//--------------------------------
+int printBuff(char* buffer, int bufferSize) {
+	for (int c=0;c<bufferSize;c++)
+	{
+		printf("%.2X ", (int)buffer[c]);
+		if (c % 4 == 3)
+			printf(" ");
+        if (c % 16 == 15)
+			printf("\n");
+	}
+		printf("\n");
+}
+
+//Save buffer to File
+int saveFile(char* buff, char* fileName, int size) {
+	FILE* file = fopen(fileName, "wb");
+	fwrite(buff, size, 1, file);
+	fclose(file);
 }
