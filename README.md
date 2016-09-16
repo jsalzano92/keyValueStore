@@ -1,2 +1,2 @@
 # keyValueStore
-Into into C Networking and DB
+Intro to C Networking and Key-Value store implementation
