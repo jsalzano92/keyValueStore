@@ -12,7 +12,7 @@ int put();
 int get();
 int rm();
 int getString(char* s, int size); //all buffer handling
-int getData(char* buff, int size, FILE* file);
+char* getData(int* size, char* fileName);
 int connectToServer(char* host, int port);
 void printBuff(char* buffer, int bufferSize);
 void saveFile(char* buff, char* fileName, int size);
@@ -28,17 +28,25 @@ typedef struct header {
 } header;
 
 int main(int argc, char* argv[]) {
+        //Check for arguments
         if(argc < 3) {
                 printf("usage: %s <host> <port number>\n", argv[0]);
                 return 1;
         }
-
+        //Try to connect to server, sending the host number and the port number to attemp
+        //If attemp fails then exit right away.
         if(!connectToServer(argv[1], atoi(argv[2]))) {
                 printf("Could Not Connect To Server.\n");
                 return -1;
         }
-        char command[10];
 
+        /*
+        Wait for a valad command from terminal.
+        When a valad command is received call the neede function.
+        All functions called are tested for success and will output message.
+        After 20 failed comands or the quit command the program will exit.
+        */
+        char command[10];
         int failed_lines = 0;
         do {
                 printf("Command: ");
@@ -46,10 +54,10 @@ int main(int argc, char* argv[]) {
                 printf("You entered: %s\n", command);
 
                 if(strcmp(command, "put") == 0) {
-                        if(put())
-                                printf("Value Stored\n");
-                        else
+                        if(!put())
                                 printf("Error in storing Value\n");
+                        else
+                                printf("Value Stored\n");
                 }
                 else if(strcmp(command, "get") == 0) {
                         if(!get())
@@ -71,11 +79,16 @@ int main(int argc, char* argv[]) {
                                 strncpy("quit", command, 9);
                 }
         } while(strcmp(command, "quit") != 0);
+        
+        //When the program is set to quit we send a message to 
+        //the server connection to let the server know we are exiting.
         write(sockt, "q", 1);
         return 0;
 }
 
 //HANDLES CONECTION TO SERVER
+//The majority of this function I don't understand completely yet
+//Taken from the Linux Ports tutorial website.
 int connectToServer(char* host, int port) {
         portN = port;
         sockt = socket(AF_INET, SOCK_STREAM, 0);
@@ -96,123 +109,110 @@ int connectToServer(char* host, int port) {
         return 1;
 }
 
+//Function to take the key and path to the file to be stored and sends it to the server
 int put()
 {
         //Gets the key and filename of what is being sent to server.
-        char keyToStore[10]; //<< NOT USED AT MOMENT
+        char keyToStore[10];
         char valueToStore[80];
 
         printf("Enter Key: ");
         if(!getString(keyToStore, 10))
                 return 0;
-        printf("You entered: %s\n", keyToStore);
 
         printf("Enter Value: ");
         if(!getString(valueToStore, 80))
                 return 0;
-        printf("You entered: %s\n", valueToStore);
 
-        //WILL consolidate to the get data function eventually
-        FILE* fp = fopen(valueToStore, "rb");
-        if(!fp) {
-                printf("Failed to open file for reading: %s\n", valueToStore);
-                return 0;
-        }
-
-        fseek(fp, 0L, SEEK_END);
-        int fSize = ftell(fp);
-        fseek(fp, 0L, SEEK_SET);
-
-        //For Testing
-        printf("client::put size of file: %d\n", fSize);
-
-        char* buff = malloc(fSize);
-        if(!getData(buff, fSize, fp))
-                return 0;
+        //initializes size variable and reads in file as as string of bytes and stores pointer to data in "buff"
+        int fSize;
+        char* buff = getData(&fSize, valueToStore);
 
         //Set up header to send to Server so the server knows whats coming.
-        header *head = malloc(sizeof(header));
-        head->type = 'p';
-        head->kSize = strlen(keyToStore);
-        head->vSize = fSize;
+        header *head = calloc(1,sizeof(header)); // Allocates memory for header
+        head->type = 'p'; // p for put
+        head->kSize = strlen(keyToStore) + 1; // + 1 so there is room for \0
+        head->vSize = fSize; // Size of buffer to send
 
         //Sends the header and then the key.
         send(sockt, head, sizeof(header), 0);
-        send(sockt, keyToStore, strlen(keyToStore), 0);
+        send(sockt, keyToStore, strlen(keyToStore) + 1, 0);
         free(head);
 
-        //For testing server response. Old Test
-        int test[10];
-        read(sockt, test, 10);
-        printf("client::put test ints read: ");
-        for(int i = 0; i < 10; ++i)
-                printf("%d, ", test[i]);
-        printf("\n");
-
-        //TestFile
-        saveFile(buff, "testBeforeSent", fSize); //<< matches for both text and binary files
-
-        // Tests the size of packet sent as well as sends the packet to Server
-        printf("client::put size of sent buffer: %d\n", (int)send(sockt, buff, fSize, 0));
-
-        //Tests what the server received by getting it right back
-        char* testbuff = malloc(fSize);
-        printf("client::put size of recv buffer: %d\n", (int)recv(sockt, testbuff, fSize, 0));
-
-        //TestFile
-        saveFile(testbuff, "testAfterReceived", fSize); //<< does not match inputFile for binary files, works for text
-
+        //Sends main buffer of file data as bytes to the server.
+        send(sockt, buff, fSize, 0);
         free(buff);
-        free(testbuff);
-        return 1;
+        
+        //Checks for success or failure of the storage.
+        //If failure will specify what error before exiting function.
+        char result[1];
+        read(sockt, result, 1);
+        if(result[0] == 'F'){
+                printf("Duplicate Key\n");
+                return 0;
+        } else {
+                return 1;
+        }
 }
 
+//Function to take a key to send to server and save the returned data buffer to a file.
 int get() {
+        //Gets key to send to server to return value
         printf("Enter Key: ");
         char keyToCheck[10];
         if(!getString(keyToCheck, 10))
                 return 0;
 
-        header *head = malloc(sizeof(header));
-
+        //Sets up header to server to let it know the length of the key and the type of server proccess to run.
+        header *head = calloc(1,sizeof(header));
         head->type = 'g';
-        head->kSize = strlen(keyToCheck);
-        head->vSize = 0;
+        head->kSize = strlen(keyToCheck) + 1;
+        head->vSize = 0; // no value being sent to server so initialized to 0
 
+        //Sends the header and then the key.
         send(sockt, head, sizeof(header), 0);
-        send(sockt, keyToCheck, strlen(keyToCheck), 0);
-
-        char test[10];
-        read(sockt, test, 10);
-        printf("client::get read test: %s\n",test);
-
-        printf("client::get recv bytes: %d\n", (int)recv(sockt, head, sizeof(header), 0));
-
-        int fSize = head->vSize;
+        send(sockt, keyToCheck, strlen(keyToCheck) + 1, 0);
+        
+        //Receives a header sized buffer that overwrites existing allocated space.
+        recv(sockt, head, sizeof(header), 0);
+        int fSize = head->vSize; // Stores the expected buffer size that is being sent by the server to fSize
         free(head);
-        printf("get function: fSize => %d\n", fSize);
-        char* buff = malloc(fSize);
-        if(recv(sockt, buff, fSize, 0) != fSize) {
-                free(buff);
+
+        //If there is no buffer coming exit the function and let the main function know that there was an error.
+        if(fSize == 0)
                 return 0;
-        }
 
-        saveFile(buff, "testRecievedFile", fSize);
+        //Allocate memory for the buffer
+        char* buff = malloc(fSize);
+        //Initialize an int that keeps track of how many bytes have been received from the server
+        int received = 0;
+        do{
+                //Updates how many bytes have been received and stores the ammount received in the buffer
+                received += recv(sockt, &buff[received], fSize-received, 0);
+        }while(received < fSize); // Continues to read from server untill all the bytes expected are stored into the buffer.
 
-        read(sockt, test, 10);
-        printf("client::get read test: %s\n",test);
+        //Gets the name of the file that the buffer will be saved to.
+        char fileToSave[80];
+        printf("Enter name and path of file to be saved: ");
+        if(!getString(fileToSave, 80))
+                return 0;
 
+        //Saves the buffer to the file with the specified name.
+        saveFile(buff, fileToSave, fSize);
+
+        //Housekeeping
         free(buff);
         return 1;
 }
 
+// RM is under constuction but uses very simular function calls as PUT and GET.
 int rm() {
         printf("Enter Key: ");
         char keyToRemove[10];
         if(!getString(keyToRemove, 10))
                 return 0;
 
-        header *head = malloc(sizeof(header));
+        header *head = calloc(1,sizeof(header));
 
         head->type = 'r';
         head->kSize = strlen(keyToRemove);
@@ -235,7 +235,7 @@ int getString(char* s, int size) {
         char cc; // char to clear buffer
         char* sPoint; // to check my string
 
-        if(fgets(s, size, stdin) != NULL) { //make sure we have something
+        if(fgets(s, size, stdin) != NULL){
                 if((sPoint = strchr(s, '\n')) != NULL) { //removes trailing newLine char if we did not use full amount of size
                         *sPoint = '\0';
                         return 1;
@@ -250,14 +250,41 @@ int getString(char* s, int size) {
 
 
 //Read File to Buffer
-int getData(char* buff, int size, FILE* file)
+char* getData(int* size, char* fileName)
 {
-        //memcpy(buff, file, size); //<< NOT WORKING
-        fread(buff, size, 1, file); //<< NOT WORKING FOR BINARY
-        printBuff(buff, size);
-        return 1;
+        //Opens file for binary reading
+        FILE* fp = fopen(fileName, "rb");
+        if(!fp) {
+                printf("Failed to open file for reading: %s\n", fileName);
+                return 0;
+        }
+
+        //Calculates the size of the file by seeking to the end and then saving the amount of bytes passed.
+        fseek(fp, 0L, SEEK_END);
+        *size = ftell(fp);
+        //Seeks back to the begining so we can read to buffer.
+        fseek(fp, 0L, SEEK_SET);
+
+        //For Testing
+        printf("client::put size of file: %d\n", *size);
+
+        //Allocates a data buffer the size of the file.
+        char* toReturn = malloc(*size);        
+
+        //Reads the bytes that make up the file to the buffer and closes the file. Then returns a pointer to the data buffer.
+        fread(toReturn, *size, 1, fp);
+        fclose(fp);
+        return toReturn;
 }
 
+//Save buffer to File
+void saveFile(char* buff, char* fileName, int size) {
+        //Opens file for binary writing.
+        FILE* file = fopen(fileName, "wb");
+        //Writes the data buffer to the specified file.
+        fwrite(buff, size, 1, file);
+        fclose(file);
+}
 
 //--------------------------------
 //NOT MY CODE, TAKEN FROM INTERNET
@@ -275,9 +302,3 @@ void printBuff(char* buffer, int bufferSize) {
         printf("\n");
 }
 
-//Save buffer to File
-void saveFile(char* buff, char* fileName, int size) {
-        FILE* file = fopen(fileName, "wb");
-        fwrite(buff, size, 1, file);
-        fclose(file);
-}
