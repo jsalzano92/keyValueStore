@@ -9,7 +9,7 @@
 also_archive = # extra files to put in archive, e.g. README notes.txt
 
 # standard Make variables, used in implicit rules
-CC     = gcc -std=c99 # gnu c compiler, 1999 version of the C language
+CC     = gcc -std=c99 -pthread # gnu c compiler, 1999 version of the C language
 CFLAGS = -Wall -lm # all warnings, link math
 
 src  = $(wildcard *.c) # source files

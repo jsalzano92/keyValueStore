@@ -13,7 +13,7 @@ echo "Testing with port $test_port"
 echo "running ./kvServer $test_port &"
 ./kvServer $test_port &
 
-echo put a $1 quit | sed -r 's/\s+/\n/g' | ./kvClient localhost $test_port
+echo put a $1 get a testAfterReceived quit | sed -r 's/\s+/\n/g' | ./kvClient localhost $test_port
 
-echo "Done, now diff testBeforeSent testAfterReceived"
-diff testBeforeSent testAfterReceived
+echo "Done, now diff $1 testAfterReceived"
+diff $1 testAfterReceived
