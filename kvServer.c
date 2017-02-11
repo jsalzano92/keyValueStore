@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "kvStore.h"
 
 
@@ -15,6 +16,10 @@ typedef struct header{
         int kSize;
         int vSize;
 } header;
+
+typedef struct client_struct{
+        int client;
+} client_struct;
 
 void putKV(header* h);
 void getKV(header* h);
@@ -30,7 +35,7 @@ socklen_t clientLen;
 struct sockaddr_in serv_addr, cli_addr;
 int initServer(int port);
 int initDatabase();
-void listenToClient();
+void* listenToClient(void* c);
 
 //ADMIN VARIABLES and FUNCTIONS
 char* password = "ymca123abc";
@@ -44,6 +49,7 @@ int main(int argc, char* argv[]) {
                 printf("usage: %s <port number>\n", argv[0]);
                 return 1;
         }
+        
         //Start Server
         if(!initServer(atoi(argv[1])))
                 return -1;
@@ -61,17 +67,16 @@ int main(int argc, char* argv[]) {
                 if(client < 0)
                         printf("Failed to accept\n");
                 //When a new client connects successfully fork a new proccess to handle new client.
-                pid = fork();
-                if(pid == 0) {
-                        //Main connection between client and server
-                        listenToClient();
-                        //When client disconects exit the fork.
-                        exit(0);
-                } else {
-                        close(client);
-                }
+                
+                client_struct* clientInfo = malloc(sizeof(client_struct));
+                clientInfo->client = client;
+                
+                pthread_t threadID;
+                pthread_create(&threadID, NULL, &listenToClient, clientInfo);
+                printf("Thread Created With Client ID: %d and Thread ID: %lu\n", client, threadID);
         }
-        clearDB(); // Because each client reallocates memory this is the way to avoid major memory leaks untill I can map memory accross server connections.
+        
+        clearDB();
         close(sockt);
         return 0;
 }
@@ -100,7 +105,13 @@ int initServer(int port) {
 }
 
 //Function to listen to client for headers. When a header is received it finds what type of request the client sent and sends the header to the correct function to handle the request.
-void listenToClient() {
+void* listenToClient(void* c) {
+        
+        
+        client_struct* clientInfo = (client_struct*) c;
+        int client = clientInfo->client;
+        free(clientInfo);
+        
         //Loops untill the client sends a packet that is not expected then breaks the connection.
         //This is also forced on the client side when the command is quit, the client purposly sends a single character buffer.
         while(1) {
@@ -122,8 +133,10 @@ void listenToClient() {
                 }
                 free(head);
         }
+        
         close(client);
-        exit(0);
+        //pthread_detach(pthread_self());
+        return 0;
 }
 
 //Receives a data buffer from the client and then calls a function to store the data buffer in our kvStorage system.
@@ -203,9 +216,7 @@ void rmKV(header* h) {
         if(recv(client, key, h->kSize, 0) != h->kSize) {
                 write(client, "badHeadR", 10);
                 free(key);
-                return;
         }
-
         free(key);
 
         //Clears then restarts the database for testing purposes.
