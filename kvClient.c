@@ -11,6 +11,9 @@
 int put();
 int get();
 int rm();
+void admin();
+int admin_login();
+void admin_shutdown();
 int getString(char* s, int size); //all buffer handling
 char* getData(int* size, char* fileName);
 int connectToServer(char* host, int port);
@@ -68,6 +71,9 @@ int main(int argc, char* argv[]) {
                                 printf("Could not remove Value with given Key\n");
                         else
                                 printf("Value Removed\n");
+                }
+                else if(strcmp(command, "admin") == 0) {
+                        admin();
                 }
                 else if(strcmp(command, "quit") == 0) {
                         printf("Goodbye!\n");
@@ -228,6 +234,73 @@ int rm() {
         printf("%s\n",test);
 
         return 1;
+}
+
+void admin() {
+        if(!admin_login()) {
+                printf("Unable to login\n");
+                return;
+        }
+        printf("Logged in as Admin\n");
+
+        char command[2];
+        do {
+                printf("Command: ");
+                getString(command, 2);
+
+                printf("%c\n", command[0]);
+        
+                if(command[0] == 'k') {
+                        admin_shutdown();
+                }
+                else if(command[0] == 'b') {
+                        printf("Exiting Admin\n");
+                }
+                else {
+                        printf("valid commands include: kill, clear, and back\n");
+                }
+        } while(command[0] != 'b');
+}
+
+int admin_login() {
+        printf("Enter Password: ");
+        char password[20];
+        if(!getString(password, 20))
+                return 0;
+
+        header *head = calloc(1, sizeof(header));
+        head->type = 'a';
+
+        send(sockt, head, sizeof(header), 0);
+        send(sockt, password, 20, 0);
+        free(head);
+
+        char status;
+
+        read(sockt, &status, 1);
+        if(status == 'S')
+                return 1;
+        else
+                return 0;
+}
+
+void admin_shutdown() {
+        printf("Shutting down server...\n");
+        header *head = calloc(1, sizeof(header));
+        head->type = 'k';
+
+        send(sockt, head, sizeof(header), 0);
+        free(head);
+
+        char status;
+
+        read(sockt, &status, 1);
+        if(status == 'S') {
+                printf("...Server shut down.\n");
+                exit(0);
+        }
+        else
+                printf("...Error shutting down server.\n");
 }
 
 // Safest way I found to get a string. Multiple sources from stack overflow mostly

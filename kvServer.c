@@ -21,13 +21,12 @@ typedef struct client_struct{
         int client;
 } client_struct;
 
-void putKV(header* h);
-void getKV(header* h);
-void rmKV(header* h);
+void putKV(header* h, int client);
+void getKV(header* h, int client);
+void rmKV(header* h, int client);
 
 //SERVER VARIABLES and FUNCTIONS
 int sockt;
-int client;
 int portN;
 int clientReturn;
 int pid;
@@ -39,9 +38,8 @@ void* listenToClient(void* c);
 
 //ADMIN VARIABLES and FUNCTIONS
 char* password = "ymca123abc";
-int adminMode = 0;
+int accessAdmin(header* h, int client);
 void shutDownServer();
-void clearDatabase();
 
 int main(int argc, char* argv[]) {
         //get port from user
@@ -63,10 +61,9 @@ int main(int argc, char* argv[]) {
 
         //Handle client connections
         while(1) {
-                client = accept(sockt, (struct sockaddr*) &cli_addr, &clientLen);
+                int client = accept(sockt, (struct sockaddr*) &cli_addr, &clientLen);
                 if(client < 0)
                         printf("Failed to accept\n");
-                //When a new client connects successfully fork a new proccess to handle new client.
                 
                 client_struct* clientInfo = malloc(sizeof(client_struct));
                 clientInfo->client = client;
@@ -75,9 +72,7 @@ int main(int argc, char* argv[]) {
                 pthread_create(&threadID, NULL, &listenToClient, clientInfo);
                 printf("Thread Created With Client ID: %d and Thread ID: %lu\n", client, threadID);
         }
-        
-        clearDB();
-        close(sockt);
+        shutDownServer();
         return 0;
 }
 
@@ -106,7 +101,7 @@ int initServer(int port) {
 
 //Function to listen to client for headers. When a header is received it finds what type of request the client sent and sends the header to the correct function to handle the request.
 void* listenToClient(void* c) {
-        
+        int admin = 0;
         
         client_struct* clientInfo = (client_struct*) c;
         int client = clientInfo->client;
@@ -123,24 +118,35 @@ void* listenToClient(void* c) {
                 }
 
                 if(head->type == 'p') {
-                        putKV(head);
+                        putKV(head, client);
                 }
                 else if(head->type == 'g') {
-                        getKV(head);
+                        getKV(head, client);
                 }
                 else if(head->type == 'r') {
-                        rmKV(head);
+                        rmKV(head, client);
+                }
+                else if(head->type =='a') {
+                        admin = accessAdmin(head, client);
+                }
+                else if(head->type == 'k') {
+                        if(admin){
+                                shutDownServer();
+                                write(client, "S", 1);
+                                exit(0);
+                        } else
+                                write(client, "F", 1);
                 }
                 free(head);
         }
         
         close(client);
-        //pthread_detach(pthread_self());
+        pthread_detach(pthread_self());
         return 0;
 }
 
 //Receives a data buffer from the client and then calls a function to store the data buffer in our kvStorage system.
-void putKV(header* h) {
+void putKV(header* h, int client) {
         //Allocates memory for the key that is expected from the client.
         //Is sent the size in the header that was passed from client.
         //Then reads the key that client sends into memory on the server side.
@@ -172,7 +178,7 @@ void putKV(header* h) {
 }
 
 //Sends the client the data associated with the key that is received.
-void getKV(header* h) {
+void getKV(header* h, int client) {
         //Allocates memory for the key that is expected from the client.
         //Is sent the size in the header that was passed from client.
         //Then reads the key that client sends into memory on the server side.
@@ -210,7 +216,7 @@ void getKV(header* h) {
 
 //Function right now just clears the DB to free the memory.
 //Not a working function other than that at the moment.
-void rmKV(header* h) {
+void rmKV(header* h, int client) {
         char* key = malloc(h->kSize);
 
         if(recv(client, key, h->kSize, 0) != h->kSize) {
@@ -226,4 +232,25 @@ void rmKV(header* h) {
         write(client, "Removed", 10);
 
         return;
+}
+
+int accessAdmin(header* h, int client) {
+        char pw[20];
+        if(recv(client, pw, 20, 0) != 20) {
+                write(client, "F", 1);
+                return 0;
+        }
+        if(strcmp(pw, password) == 0) {
+                write(client, "S", 1);
+                return 1;
+        }
+        else {
+                write(client, "F", 1);
+                return 0;
+        }
+}
+
+void shutDownServer() {
+        clearDB();
+        close(sockt);
 }

@@ -2,7 +2,6 @@
 #include <string.h>
 #include "kvStore.h"
 
-
 //Allocates the memory for a new kvTable structure and the hashtable of pointers
 int initDatabase() {
         kvTable = malloc(sizeof(hashTable));
@@ -14,7 +13,7 @@ int initDatabase() {
 //Takes a key and a value from the front end of the server and stores it in the hashtable.
 int addValue(char* key, char* value, int vSize) {
         //Takes the key and hashes it, then mods the hash to fit in the table.
-        int hash = hashKey(key);
+        unsigned long hash = hashKey(key);
         int index = hash % TABLE_SIZE;
         //Checks if the key already exists. If it does then return as a failure.
         if(checkKey(key))
@@ -39,7 +38,7 @@ int addValue(char* key, char* value, int vSize) {
 //Checks the key given to see if it exists in the hashtable.
 int checkKey(char* key) {
         //Hashes the key
-        int hash = hashKey(key);
+        unsigned long hash = hashKey(key);
         //Mods the hash to find the index to search in.
         int index = hash % TABLE_SIZE;
         
@@ -68,7 +67,7 @@ int checkKey(char* key) {
 //Returns the data associated with the key given.
 char* getValue(char* key, int* vSize) {
         //Hashes the key
-        int hash = hashKey(key);
+        unsigned long hash = hashKey(key);
         //Mods the hash to find the index to search in.
         int index = hash % TABLE_SIZE; 
 
@@ -97,9 +96,18 @@ char* getValue(char* key, int* vSize) {
         return NULL;
 }
 
-//Hashes everything to index 0 for now for testing purposes. Will research good hashing algorithms in next step.
-int hashKey(char* key) {
-        return 0;
+// Using DJB2 hashing algorithm found on stack overflow and multiple other online sources.
+unsigned long hashKey(char* key) {
+        unsigned long hash = 5381;
+        int c;
+
+        while (*key) {
+                c = *key;
+                hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+                key++;
+        }
+
+        return hash;
 }
 
 //Clears the database and all nodes. Frees all memory allocated in the preceiding functions.

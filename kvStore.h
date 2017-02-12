@@ -1,14 +1,14 @@
 
-//A set size of the hashTable. using 100 for testing purposes for now.
-#define TABLE_SIZE 100
+//A set size of the hashTable. using 101 (a prime) for testing purposes for now.
+#define TABLE_SIZE 101
 
 //dataNode structure.
 typedef struct node{
-        int hash; //the key hash
+        unsigned long hash; //the key hash
         char* key; //the raw key
         char* value; //the value data
         int vSize; //size of data
-        struct node* next; // next node in linked list.
+        struct node* next; // next node in linked list
 }dataNode;
 
 //Struct of hashTable
@@ -21,7 +21,7 @@ typedef struct kvHashtable {
 hashTable* kvTable;
 
 //kvStore.c function definitions.
-int hashKey(char* key);
+unsigned long hashKey(char* key);
 int addValue(char* key, char* value, int vSize);
 int checkKey(char* key);
 char* getValue(char* key, int* vSize);
